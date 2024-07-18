@@ -1,10 +1,10 @@
 # Projeto de Ray Tracing
 
-Este projeto é uma implementação de um Ray Tracer simples em Python. O Ray Tracing é uma técnica de renderização que simula a forma como a luz interage com os objetos em uma cena para produzir imagens realistas. O projeto foi inspirado em um exemplo de Ray Tracing do professor Claudio Esperança (https://observablehq.com/@esperanc/raytracing).
+      Este projeto é uma implementação de um Ray Tracer simples em Python. O Ray Tracing é uma técnica de renderização que simula a forma como a luz interage com os objetos em uma cena para produzir imagens realistas. O projeto foi inspirado em um exemplo de Ray Tracing do professor Claudio Esperança (https://observablehq.com/@esperanc/raytracing).
 
 ## Descrição
 
-Este Ray Tracer foi desenvolvido para renderizar uma cena composta por esferas e um plano, com suporte para iluminação ambiente, difusa e especular, bem como reflexões. A câmera está posicionada em um ponto fixo, olhando diretamente para a cena. A fonte de luz é colocada em uma posição fixa acima e atrás da câmera.
+      Este Ray Tracer foi desenvolvido para renderizar uma cena composta por esferas e um plano, com suporte para iluminação ambiente, difusa e especular, bem como reflexões. A câmera está posicionada em um ponto fixo, olhando diretamente para a cena. A fonte de luz é colocada em uma posição fixa acima e atrás da câmera.
 
 ### Decisões de Projeto
 
@@ -41,13 +41,13 @@ Este Ray Tracer foi desenvolvido para renderizar uma cena composta por esferas e
 
 ## Como Executar
 
-Para executar o projeto, certifique-se de ter as bibliotecas numpy e matplotlib instaladas. Você pode instalá-las usando pip:
+      Para executar o projeto, certifique-se de ter as bibliotecas numpy e matplotlib instaladas. Você pode instalá-las usando pip:
 pip install numpy matplotlib
 
-Em seguida, execute o script principal para gerar a imagem:
+      Em seguida, execute o script principal para gerar a imagem:
 python ray_tracing.py
 
-A imagem renderizada será salva como ray_tracing_spheres.png.
+      A imagem renderizada será salva como ray_tracing_spheres.png.
 
 ## Melhorias Futuras
 
