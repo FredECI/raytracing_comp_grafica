@@ -1,136 +1,128 @@
 import numpy as np
-from PIL import Image
+import matplotlib.pyplot as plt
 
-# Classe para definir um vetor 3D
-class Vector:
-    def __init__(self, x, y, z):
-        self.x = x
-        self.y = y
-        self.z = z
+# Função para normalizar um vetor
+def normalize(vector):
+    return vector / np.linalg.norm(vector)
 
-    # Adição de vetores
-    def add(self, v):
-        return Vector(self.x + v.x, self.y + v.y, self.z + v.z)
+# Função para calcular a reflexão de um vetor em relação a um eixo
+def reflect(vector, axis):
+    return vector - 2 * np.dot(vector, axis) * axis
 
-    # Subtração de vetores
-    def sub(self, v):
-        return Vector(self.x - v.x, self.y - v.y, self.z - v.z)
-
-    # Multiplicação escalar
-    def scale(self, s):
-        return Vector(self.x * s, self.y * s, self.z * s)
-
-    # Produto escalar (dot product)
-    def dot(self, v):
-        return self.x * v.x + self.y * v.y + self.z * v.z
-
-    # Normalização do vetor
-    def normalize(self):
-        mag = np.sqrt(self.dot(self))
-        return self.scale(1 / mag)
-
-    # Reflexão do vetor
-    def reflect(self, normal):
-        return self.sub(normal.scale(2 * self.dot(normal)))
-
-# Classe para definir um raio
-class Ray:
-    def __init__(self, origin, direction):
-        self.origin = origin
-        self.direction = direction.normalize()
-
-# Classe para definir uma esfera
-class Sphere:
-    def __init__(self, center, radius, color, shininess=100):
-        self.center = center
-        self.radius = radius
-        self.color = color
-        self.shininess = shininess
-
-    # Interseção do raio com a esfera
-    def intersect(self, ray):
-        oc = ray.origin.sub(self.center)
-        a = ray.direction.dot(ray.direction)
-        b = 2.0 * oc.dot(ray.direction)
-        c = oc.dot(oc) - self.radius * self.radius
-        discriminant = b * b - 4 * a * c
-        if discriminant < 0:
-            return None
-        else:
-            t = (-b - np.sqrt(discriminant)) / (2.0 * a)
+# Função para verificar interseção do raio com um plano
+def intersect_plane(point, normal, ray_origin, ray_dir):
+    denom = np.dot(ray_dir, normal)
+    if np.abs(denom) > 1e-6:  # Verifica se o denominador não é zero
+        t = np.dot(point - ray_origin, normal) / denom
+        if t >= 0:
             return t
+    return None
 
-# Função para traçar os raios e obter a cor do pixel
-def trace_ray(ray, spheres, light, depth):
-    closest_t = float('inf')
-    closest_sphere = None
+# Função para verificar interseção do raio com uma esfera
+def intersect_sphere(center, radius, ray_origin, ray_dir):
+    b = 2 * np.dot(ray_dir, ray_origin - center)
+    c = np.linalg.norm(ray_origin - center) ** 2 - radius ** 2
+    delta = b ** 2 - 4 * c
+    if delta > 0:
+        t1 = (-b + np.sqrt(delta)) / 2
+        t2 = (-b - np.sqrt(delta)) / 2
+        if t1 > 0 and t2 > 0:
+            return min(t1, t2)
+    return None
 
-    for sphere in spheres:
-        t = sphere.intersect(ray)
-        if t is not None and t < closest_t:
-            closest_t = t
-            closest_sphere = sphere
+# Função para encontrar o objeto mais próximo intersectado pelo raio
+def find_closest_object(objects, ray_origin, ray_dir):
+    distances = []
+    for obj in objects:
+        if obj['type'] == 'sphere':
+            distances.append(intersect_sphere(obj['center'], obj['radius'], ray_origin, ray_dir))
+        elif obj['type'] == 'plane':
+            distances.append(intersect_plane(obj['point'], obj['normal'], ray_origin, ray_dir))
+    
+    closest_object = None
+    min_distance = np.inf
+    for idx, distance in enumerate(distances):
+        if distance and distance < min_distance:
+            min_distance = distance
+            closest_object = objects[idx]
+    return closest_object, min_distance
 
-    if closest_sphere is not None:
-        hit_point = ray.origin.add(ray.direction.scale(closest_t))
-        normal = hit_point.sub(closest_sphere.center).normalize()
-        to_light = light.sub(hit_point).normalize()
-        to_camera = ray.direction.scale(-1)
+# Função principal de ray tracing
+def trace_ray(ray_origin, ray_dir, objects, light, camera, depth=0, max_depth=3):
+    # Verifica se a profundidade máxima de recursão foi atingida
+    if depth >= max_depth:
+        return np.zeros((3))
+    
+    # Encontra o objeto mais próximo que o raio intersecta
+    closest_object, min_distance = find_closest_object(objects, ray_origin, ray_dir)
+    if closest_object is None:
+        return np.zeros((3))  # Retorna preto se não houver interseção
 
-        # Componente ambiente
-        ambient = closest_sphere.color.scale(0.1)
+    intersection = ray_origin + min_distance * ray_dir
+    if closest_object['type'] == 'sphere':
+        surface_normal = normalize(intersection - closest_object['center'])
+    elif closest_object['type'] == 'plane':
+        surface_normal = closest_object['normal']
+    
+    shifted_point = intersection + 1e-5 * surface_normal
+    to_light = normalize(light['position'] - shifted_point)
 
-        # Componente difusa
-        diff = max(normal.dot(to_light), 0)
-        diffuse = closest_sphere.color.scale(diff)
+    _, min_distance = find_closest_object(objects, shifted_point, to_light)
+    light_distance = np.linalg.norm(light['position'] - intersection)
+    is_shadowed = min_distance < light_distance
 
-        # Componente especular
-        reflection = to_light.reflect(normal)
-        spec = max(reflection.dot(to_camera), 0) ** closest_sphere.shininess
-        specular = Vector(1, 1, 1).scale(spec)
+    if is_shadowed:
+        return np.zeros((3))  # Retorna preto se estiver sombreado
 
-        color = ambient.add(diffuse).add(specular)
+    illumination = np.zeros((3))
 
-        if depth > 0:
-            reflection_dir = ray.direction.reflect(normal)
-            reflected_ray = Ray(hit_point, reflection_dir)
-            reflected_color = trace_ray(reflected_ray, spheres, light, depth - 1)
-            color = color.scale(0.8).add(reflected_color.scale(0.2))
+    # Componente ambiente
+    illumination += closest_object['ambient'] * light['ambient']
+    # Componente difusa
+    illumination += closest_object['diffuse'] * light['diffuse'] * np.dot(to_light, surface_normal)
+    # Componente especular
+    to_camera = normalize(camera - intersection)
+    H = normalize(to_light + to_camera)
+    illumination += closest_object['specular'] * light['specular'] * np.dot(surface_normal, H) ** (closest_object['shininess'] / 4)
 
-        return color
+    # Reflexão
+    if 'reflection' in closest_object:
+        reflection_dir = reflect(ray_dir, surface_normal)
+        reflection = closest_object['reflection'] * trace_ray(shifted_point, reflection_dir, objects, light, camera, depth + 1, max_depth)
+        illumination += reflection
 
-    return Vector(0, 0, 0)
+    return illumination
 
-# Função principal para gerar a imagem
-def render(width, height, spheres, light):
-    image = Image.new('RGB', (width, height))
-    pixels = image.load()
-    camera = Vector(0, 0, 1)
+# Parâmetros da imagem
+width = 1920
+height = 1080
+camera = np.array([0, 0, 1])
+aspect_ratio = float(width) / height
+screen = (-1, 1 / aspect_ratio, 1, -1 / aspect_ratio)
 
-    for y in range(height):
-        for x in range(width):
-            u = (x / width) * 2 - 1
-            v = (y / height) * 2 - 1
-            ray_direction = Vector(u, v, -1).sub(camera).normalize()
-            ray = Ray(camera, ray_direction)
-            color = trace_ray(ray, spheres, light, 1)
-            pixels[x, y] = (
-                min(int(color.x * 255), 255),
-                min(int(color.y * 255), 255),
-                min(int(color.z * 255), 255)
-            )
+light = {
+    'position': np.array([0, 5, 5]),
+    'ambient': np.array([1, 1, 1]),
+    'diffuse': np.array([1, 1, 1]),
+    'specular': np.array([1, 1, 1])
+}
 
-    return image
-
-# Exemplo de uso com iluminação
-spheres = [
-    Sphere(Vector(0, 0, -3), 1, Vector(1, 0, 0)),  # Esfera vermelha
-    Sphere(Vector(2, 0, -4), 1, Vector(0, 1, 0)),  # Esfera verde
-    Sphere(Vector(-2, 0, -4), 1, Vector(0, 0, 1)),  # Esfera azul
-    Sphere(Vector(0, -1001, -3), 1000, Vector(1, 1, 0))  # Plano amarelo
+objects = [
+    {'type': 'sphere', 'center': np.array([-0.3, 0.6, -0.6]), 'radius': 0.09, 'ambient': np.array([0.2, 0.3, 0.2]), 'diffuse': np.array([0.6, 0.8, 0.2]), 'specular': np.array([1, 1, 1]), 'shininess': 100, 'reflection': 0.5},
+    {'type': 'sphere', 'center': np.array([-0.7, -0.1, -0.4]), 'radius': 0.20, 'ambient': np.array([0.2, 0.3, 0.2]), 'diffuse': np.array([0.6, 0.8, 0.2]), 'specular': np.array([1, 1, 1]), 'shininess': 100, 'reflection': 0.5},
+    {'type': 'sphere', 'center': np.array([0.4, -0.3, -0.5]), 'radius': 0.15, 'ambient': np.array([0.2, 0.3, 0.2]), 'diffuse': np.array([0.6, 0.8, 0.2]), 'specular': np.array([1, 1, 1]), 'shininess': 100, 'reflection': 0.5},
+    {'type': 'sphere', 'center': np.array([0, 0.1, -1]), 'radius': 0.55, 'ambient': np.array([0.3, 0.1, 0.1]), 'diffuse': np.array([0.8, 0.2, 0.2]), 'specular': np.array([1, 1, 1]), 'shininess': 100, 'reflection': 0.5},
+    {'type': 'plane', 'point': np.array([0, -0.5, 0]), 'normal': np.array([0, 1, 0]), 'ambient': np.array([0.1, 0.1, 0.1]), 'diffuse': np.array([0.6, 0.5, 0.7]), 'specular': np.array([0.5, 0.5, 0.5]), 'shininess': 50}
 ]
 
-light = Vector(5, 5, -10)
-width, height = 400, 300  # Reduzir a resolução ainda mais para acelerar o processo
-image = render(width, height, spheres, light)
-image.save('ray_tracing_espheres.png')
+# Renderiza a imagem
+image = np.zeros((height, width, 3))
+for i, y in enumerate(np.linspace(screen[1], screen[3], height)):
+    for j, x in enumerate(np.linspace(screen[0], screen[2], width)):
+        pixel = np.array([x, y, 0])
+        origin = camera
+        direction = normalize(pixel - origin)
+        color = trace_ray(origin, direction, objects, light, camera)
+        image[i, j] = np.clip(color, 0, 1)
+
+plt.imsave('ray_tracing_espheres.png', image)
